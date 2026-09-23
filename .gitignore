@@ -1,0 +1,27 @@
+# Build artifacts
+*.o
+*.d
+*.a
+*.bin
+*.dsk
+*.img
+
+# Pintos-specific build outputs
+build/
+kernel.o
+loader.bin
+kernel.bin
+pintos_dump.txt
+
+# GDB / debugging
+.gdb_history
+gdb.txt
+
+# Editor/OS cruft
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Docker
+*.log
