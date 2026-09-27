@@ -85,11 +85,12 @@ struct thread
     /* Owned by thread.c. */
     tid_t tid;                          /**< Thread identifier. */
     enum thread_status status;          /**< Thread state. */
-    int64_t wkup_ticks; /** Wake up ticks */
     char name[16];                      /**< Name (for debugging purposes). */
     uint8_t *stack;                     /**< Saved stack pointer. */
     int priority;                       /**< Priority. */
     struct list_elem allelem;           /**< List element for all threads list. */
+
+    int64_t wkup_ticks;/*added for task1 to check for sleep ticks*/ 
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /**< List element. */

@@ -98,11 +98,31 @@ timer_sleep (int64_t ticks)
   
 
   //added for project 1
-  if (timer_elapsed (start) < ticks) {
+  if (timer_elapsed (start) < ticks)
+  {
+    enum intr_level old_level= intr_set_level(INTR_OFF);
+
     struct thread *current_thread= thread_current();
     current_thread->wkup_ticks=start+ticks;
-    list_push_front(thread_get_sleep_list(),current_thread);
+
+    list_insert_ordered (thread_get_sleep_list(),&current_thread->elem,
+                          sleepListOderBigFirst,NULL);
+
     thread_block();
+    intr_set_level(old_level);
+  }
+}
+
+//less func of the ordered insert (big first small last)
+bool
+sleepListOderBigFirst(const struct list_elem *a, 
+					  const struct list_elem *b,
+					  void *aux UNUSED)
+{
+	struct thread *first = list_entry(a, struct thread,elem); 
+	struct thread *second= list_entry(b, struct thread,elem); 
+
+	return first->wkup_ticks > second->wkup_ticks; 
 }
 
 /** Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -180,6 +200,21 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+
+  struct list *sleep_list = thread_get_sleep_list();
+
+  while (!list_empty(sleep_list))
+  {
+	  struct list_elem *e= list_back(sleep_list);
+	  struct thread *curr_thread = list_entry(e,struct thread,elem);
+	  //if still wait then do nothing
+	  if (curr_thread->wkup_ticks > ticks)
+	  {
+		  break;
+	  }
+	  list_pop_back(sleep_list);
+	  thread_unblock(curr_thread);
+  }
   thread_tick ();
 }
 

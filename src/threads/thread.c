@@ -37,9 +37,9 @@ static struct thread *initial_thread;
 /** Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
-/** Sleeping thread list, editted by Khoa */
-
+/** Sleeping thread list, for task 1---------------------------------------*/
 static struct list sleep_list;
+/** -----------------------------------------------------------------------*/
 
 /** Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
@@ -98,7 +98,9 @@ thread_init (void)
   list_init (&all_list);
 
 
+/** Sleeping thread list, for task 1---------------------------------------*/
   list_init (&sleep_list); //Edited by Khoa
+/** -----------------------------------------------------------------------*/
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -592,5 +594,8 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 
 //Added for p1;
+struct list* thread_get_sleep_list()
+{
+	return &sleep_list;
+}
 
-struct list* thread_get_sleep_list(){return &sleep_list;}
