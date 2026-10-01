@@ -91,7 +91,8 @@ struct thread
     int priority;                       /**< Priority. */
     struct list_elem allelem;           /**< List element for all threads list. */
 
-    int64_t wkup_ticks;/*added for task1 to check for sleep ticks*/ 
+	//for task 1
+    int64_t wkup_ticks;
 	struct semaphore sleep_sema;
     struct list_elem sleep_elem;              
 

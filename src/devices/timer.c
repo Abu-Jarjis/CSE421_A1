@@ -21,6 +21,7 @@
 static int64_t ticks;
 
 
+
 /** Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
@@ -94,7 +95,6 @@ timer_sleep (int64_t ticks)
 
   ASSERT (intr_get_level () == INTR_ON);
  
-
   //added for project 1
   if (timer_elapsed (start) < ticks)
   {
@@ -108,19 +108,18 @@ timer_sleep (int64_t ticks)
                           sleepListOderBigFirst,NULL);
 
 	intr_set_level(old_level);
-
 	sema_down(&current_thread->sleep_sema);
   }
 }
 
 //less func of the ordered insert (big first small last)
 bool
-sleepListOderBigFirst(const struct list_elem *a, 
-					  const struct list_elem *b,
-					  void *aux UNUSED)
+sleepListOderBigFirst(const struct list_elem *e1,
+					  const struct list_elem *e2,
+					  void *aux)
 {
-	struct thread *first = list_entry(a, struct thread,sleep_elem); 
-	struct thread *second= list_entry(b, struct thread,sleep_elem); 
+	struct thread *first = list_entry(e1, struct thread,sleep_elem); 
+	struct thread *second= list_entry(e2, struct thread,sleep_elem); 
 
 	return first->wkup_ticks > second->wkup_ticks; 
 }
