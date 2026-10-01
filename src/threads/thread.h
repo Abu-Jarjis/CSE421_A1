@@ -93,6 +93,7 @@ struct thread
 
     int64_t wkup_ticks;/*added for task1 to check for sleep ticks*/ 
 	struct semaphore sleep_sema;
+    struct list_elem sleep_elem;              
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /**< List element. */
