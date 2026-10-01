@@ -20,8 +20,7 @@
 /** Number of timer ticks since OS booted. */
 static int64_t ticks;
 
-
-
+static struct semaphore sleepList_sema;
 
 /** Number of loops per timer tick.
    Initialized by timer_calibrate(). */
@@ -40,7 +39,7 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
-  sema_init(&semaphore,1);
+  sema_init(&sleepList_sema,0);
 }
 
 /** Calibrates loops_per_tick, used to implement brief delays. */
@@ -97,22 +96,24 @@ timer_sleep (int64_t ticks)
 
   ASSERT (intr_get_level () == INTR_ON);
  
- 	sema_down(&semaphore); 
 
   //added for project 1
   if (timer_elapsed (start) < ticks)
   {
  
+	sema_down(&sleepList_sema);
+    enum intr_level old_level= intr_set_level(INTR_OFF);
 
     struct thread *current_thread= thread_current();
     current_thread->wkup_ticks=start+ticks;
 
     list_insert_ordered (thread_get_sleep_list(),&current_thread->elem,
                           sleepListOderBigFirst,NULL);
-   enum intr_level old_level= intr_set_level(INTR_OFF);
-   sema_up(&semaphore);
-    thread_block();
-    intr_set_level(old_level);
+
+	sema_up(&sleepList_sema);
+	intr_set_level(old_level);
+
+	sema_down(&current_thread->sleep_sema);
   }
 }
 
@@ -216,7 +217,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 		  break;
 	  }
 	  list_pop_back(sleep_list);
-	  thread_unblock(curr_thread);
+	  sema_up(&curr_thread->sleep_sema);
   }
   thread_tick ();
 }
@@ -292,4 +293,3 @@ real_time_delay (int64_t num, int32_t denom)
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
 }
 
-struct semaphore semaphore;
