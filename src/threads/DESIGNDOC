@@ -7,10 +7,9 @@
 ---- GROUP ----
 
 >> Fill in the names and email addresses of your group members.
-
+Qazi Abu Jarjis <qaziabuj@buffalo.edu>
 Bach Phham <npham3@buffalo.edu>
 Khoa Nguyen <kvn3@buffalo.edu>
-FirstName LastName <email@domain.example>
 
 ---- PRELIMINARIES ----
 
@@ -30,19 +29,46 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+1. In struct thread (thread.h):
+
+--	int64_t wkup_ticks;
+		Timer tick is absolute in which a spleeing thread should wake up
+-- 	struct semaphore sleep_sama:
+		Per-thread semaphore, set to 0. The thread sleeps on it in timer_sleep() method. The thread is woken by the timer interrupt calling sema_up() on this semaphore.
+--  struct list_elem sleep_elem;
+		Is a list element for sleep_list. It is separate from elem because sema_down() puts element on the semaphore's waiters list at the same time the thread is on sleep_list.
+2. In thread.c:
+
+-- static struct list sleep_list;
+		Threads currently sleeping in timer_sleep() are sorted by wkup_ticks, largest at the front and smallest tick(soonest to wake up) at the end.
+-- struct list *thread_get_sleep_list (boid)
+		Gives timer.c acess to the static sleep_list in thread.c
+
+3. In timer.c:
+--	bool sleepListOderBigFirst (const struct list_elem *, const struct list_elem *, void *aux);
+		Comparator for list_insert_ordered() which keeps sleep_list sorted by wkup_ticks in descending order.
+
+
 
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
 
+timer_sleep() returns immediately if ticks <= 0. While interrups inactive briefly, it sets the current thread's wkup_ticks to start+ticks and inserts the thread into sleep_list in sorted order. Interrupts are enabled and sema_down() is called on its own sleep_sema which blocks the thread.
+
+The timer interrupt handler increment ticks (per tick) and then looks at the end of sleep_list (for the lowest value wkup_ticks). While the specific threads wkup_ticks is <= ticks, it removes thread from the list and calls sema_up() on its sleep_sema, and is put on the ready list after unblocking the thread. It stops at the frist thread that requires waiting.
+
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+
+The handler never scans the wholes list as sleep_list is always kept sorted. It only the checks the last element (the first to wake up thread) and wakes it if "wake up" time has arrive, and repeats until it stops at a thread whose wkup_ticks is higher than current ticks.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
+timer interrupt handler and sleep list are shared and cant acquire locks. So interrupts is disable during insertion into sleep_list.
 
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
