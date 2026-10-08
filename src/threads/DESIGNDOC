@@ -55,28 +55,33 @@ Khoa Nguyen <kvn3@buffalo.edu>
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
 
-timer_sleep() returns immediately if ticks <= 0. While interrups inactive briefly, it sets the current thread's wkup_ticks to start+ticks and inserts the thread into sleep_list in sorted order. Interrupts are enabled and sema_down() is called on its own sleep_sema which blocks the thread.
+1. timer_sleep() returns immediately if ticks <= 0. While interrups inactive briefly, it sets the current thread's wkup_ticks to start+ticks and inserts the thread into sleep_list in sorted order. Interrupts are enabled and sema_down() is called on its own sleep_sema which blocks the thread.
 
-The timer interrupt handler increment ticks (per tick) and then looks at the end of sleep_list (for the lowest value wkup_ticks). While the specific threads wkup_ticks is <= ticks, it removes thread from the list and calls sema_up() on its sleep_sema, and is put on the ready list after unblocking the thread. It stops at the frist thread that requires waiting.
+2. The timer interrupt handler increment ticks (per tick) and then looks at the end of sleep_list (for the lowest value wkup_ticks). While the specific threads wkup_ticks is <= ticks, it removes thread from the list and calls sema_up() on its sleep_sema, and is put on the ready list after unblocking the thread. It stops at the frist thread that requires waiting.
 
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
 
-The handler never scans the wholes list as sleep_list is always kept sorted. It only the checks the last element (the first to wake up thread) and wakes it if "wake up" time has arrive, and repeats until it stops at a thread whose wkup_ticks is higher than current ticks.
+1. The handler never scans the wholes list as sleep_list is always kept sorted. It only the checks the last element (the first to wake up thread) and wakes it if "wake up" time has arrive, and repeats until it stops at a thread whose wkup_ticks is higher than current ticks.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
-timer interrupt handler and sleep list are shared and cant acquire locks. So interrupts is disable during insertion into sleep_list.
+seep_list is shared with the timer interrupt handler, which cannot acquire locks, so interrupts are disabled during insertion into sleep_list. So interrupts is disable during insertion into sleep_list. During this window, no other thread can run on a single CPU. Two threads can not modify sleep_list at the same time. Interrupts are off only for the list insertion. 
 
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+
+he list insertion happens with interrupts off, so the handler never sees sleep_list half updated. If the interrupt fires after interrupts turns on again but before sema_down(), the handlers sema_up() still counts. Tthe semaphores value becomes 1, so sema_down() returns right away and the wake up is nott lost.
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+Blocking on a semaphore uses no CPU while the thread waits, so theres no busy waiting. It also keeps interrupts off only for the list insertion, and the semaphore handles the wake-up race in A5 without extra code. We keep sleep_list sorted so the interrupt handler, instead of checking every sleeping thread each tick, it only checks ones that are due.
+
 
              PRIORITY SCHEDULING
              ===================
@@ -86,21 +91,58 @@ timer interrupt handler and sleep list are shared and cant acquire locks. So int
 >> B1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+1. struct thread (thread.h):
+	int base_priority;
+		thread-set priority for itself. Restored when donations
+		are removed. The existing priority field holds the effective priority.
+
+	struct list donors;
+		Threads currently donating priority to this thread, For exmaple, threads waiting on a lock this thread holds.
+
+	struct list_elem donor_elem;
+		List element used to put this thread in another thread's donors list.
+
+	struct lock *waiting_lock;
+		The lock this thread is blocked on, or NULL will be used to follow the chain of holders for nested donation.
+2. threa.c:
+	bool thread_priority_greater (const struct list_elem *, const struct list_elem *, void *aux);
+		Comparator that orders threads by effective priority, highest first. Used for the ready list and wait lists.
+
 
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
 >> .png file.)
+
+Each thread keeps a list of donors (threads waiting on locks it
+holds) and a pointer to the lock it is waiting on. A thread's
+effective priority is the maximum of its base_priority and all donor priorities. The donors list handles multiple
+donations where when one lock is released, only the donors waiting onthat lock are removed, and the priority is recomputed from therest. The waiting_lock pointer handles nested donation. From a thread we can see that waiting_lock -> lock->holder -> waiting_lock and so on, while raising each holder's priority in the path.
 
 ---- ALGORITHMS ----
 
 >> B3: How do you ensure that the highest priority thread waiting for
 >> a lock, semaphore, or condition variable wakes up first?
 
+The ready list is kept sorted by priority. sema_up(), which is used by locks, and cond_signal wake up the highest priority thread, cchosen at wake up time because a waiter's priority can change through donation while it wait. The current thread yields execution whenever a higher-ranking thread wakes up.
+
+
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
 
+1. Interrupts are disabled.
+2. If the lock has a holder and the MLFQS scheduler is off, the current thread sets waiting_lock to the lock and adds itself to the holders donors list.
+3. Donation: starting from the current thread, while the thread has a waiting_lock and the depth is under 8, find that lock’s holder. If the holder’s priority is lower, raise it to the donating thread’s priority and then move to the holder and repeat. This walk handles nested donation.
+4. Interrupts are restored and the thread calls sema_down() on 	the locks semaphore.
+5. Once it acquires the lock, it sets waiting_lock to null and becomes the lock’s holder.
+
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
+
+1. Interrupts are disabled.
+2. The current thread removes from its donors list every thread whose waiting_lock is this lock.
+3. It recomputes its effective priority as the maximum of its base_priority and the priorities of its remaining donors.
+4. It clears the lock’s holder and calls sema_up(), which wakes the highest-priority waiter.
+5. Because the woken thread now has a higher priority than the current thread, the current thread yields that instant and the higher priority thread runs.
 
 ---- SYNCHRONIZATION ----
 
@@ -108,10 +150,14 @@ timer interrupt handler and sleep list are shared and cant acquire locks. So int
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
+A donateion from a different thred could change our priority while thread_set_priority() is updating it, overwriting the donated vlaue. Interrupts are disable while base_priorirty is set, recomputing effective priority and checking if it should yield. A lock would fail as acquiring it would cause donation and ready list is accessed by the scheduler with interrupts off.
+
 ---- RATIONALE ----
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+single donated-priority value per thread would break when a thread holds several locks, because releasing one lock wouldn’t restore the right priority. A donors list fixes this, and the waiting_lock pointer makes nested donation a simple loop. We pick the highest priority thread at wake up time because priorities can change while a thread waits.
 
               ADVANCED SCHEDULER
               ==================
