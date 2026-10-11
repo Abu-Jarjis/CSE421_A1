@@ -199,7 +199,7 @@ thread_create (const char *name, int priority,
   kf->aux = aux;
 
   /* Stack frame for switch_entry(). */
-  ef = alloc_frame (t, sizeof *ef)u
+  ef = alloc_frame (t, sizeof *ef);
   ef->eip = (void (*) (void)) kernel_thread;
 
   /* Stack frame for switch_threads(). */
@@ -602,7 +602,6 @@ allocate_tid (void)
 
   return tid;
 }
-
 /** Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
@@ -621,8 +620,8 @@ bool priority_sort(const struct list_elem *e1,
                                           const struct list_elem *e2,
                                           void *aux)
 {       
-        struct thread *first = list_entry(e1, struct thread,ready_list);
-        struct thread *second= list_entry(e2, struct thread,ready_list);
+        struct thread *first = list_entry(e1, struct thread,elem);
+        struct thread *second= list_entry(e2, struct thread,elem);
         
         return first->priority > second->priority;
 }
