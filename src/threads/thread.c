@@ -199,7 +199,7 @@ thread_create (const char *name, int priority,
   kf->aux = aux;
 
   /* Stack frame for switch_entry(). */
-  ef = alloc_frame (t, sizeof *ef);
+  ef = alloc_frame (t, sizeof *ef)u
   ef->eip = (void (*) (void)) kernel_thread;
 
   /* Stack frame for switch_threads(). */
@@ -246,9 +246,20 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  
+  list_insert_ordered(&ready_list, &t->elem,priority_sort,NULL);
   t->status = THREAD_READY;
-  intr_set_level (old_level);
+ // Schedule the new thread immediately if its priority is higher than the running_thread
+  //
+  //
+  //
+  //
+  if (thread_current()->priority < t->priority){
+  thread_yield();
+  }
+
+ //////
+  switch_entryset_level (old_level);
 }
 
 /** Returns the name of the running thread. */
@@ -317,7 +328,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered(&ready_list, &cur->elem,priority_sort,NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -602,4 +613,19 @@ struct list* thread_get_sleep_list()
 {
 	return &sleep_list;
 }
+
+
+
+//Less function for the priority. Added by Khoa.
+bool priority_sort(const struct list_elem *e1,
+                                          const struct list_elem *e2,
+                                          void *aux)
+{       
+        struct thread *first = list_entry(e1, struct thread,ready_list);
+        struct thread *second= list_entry(e2, struct thread,ready_list);
+        
+        return first->priority > second->priority;
+}
+
+
 
