@@ -207,10 +207,13 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+printf ("THREAD_CREATE: unblocking %s status=%d\n",
+        t->name, t->status);
+
   /* Add to run queue. */
   thread_unblock (t);
 
- // Schedule the new thread immediately if its priority is higher than the running_thread
+ // Schedule the new thread if priority is higher than the curr 
   if (thread_current()->priority < t->priority){
 	  thread_yield();
   }
@@ -247,14 +250,13 @@ thread_unblock (struct thread *t)
 {
   enum intr_level old_level;
 
+  printf("unblock: thread=%s tid=%d status=%d\n", t->name, t->tid, t->status);
   ASSERT (is_thread (t));
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  
   list_insert_ordered(&ready_list, &t->elem,priority_sort,NULL);
   t->status = THREAD_READY;
-
   intr_set_level (old_level);
 }
 
