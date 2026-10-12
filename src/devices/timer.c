@@ -104,7 +104,7 @@ timer_sleep (int64_t ticks)
     struct thread *current_thread= thread_current();
     current_thread->wkup_ticks=start+ticks;
 
-    list_insert_ordered (thread_get_sleep_list(),&current_thread->elem,
+    list_insert_ordered (thread_get_sleep_list(),&current_thread->sleep_elem,
                           sleepListOderBigFirst,NULL);
 
 	sema_down(&current_thread->sleep_sema);
@@ -118,8 +118,8 @@ sleepListOderBigFirst(const struct list_elem *e1,
 					  const struct list_elem *e2,
 					  void *aux)
 {
-	struct thread *first = list_entry(e1, struct thread,elem); 
-	struct thread *second= list_entry(e2, struct thread,elem); 
+	struct thread *first = list_entry(e1, struct thread,sleep_elem); 
+	struct thread *second= list_entry(e2, struct thread,sleep_elem); 
 
 	return first->wkup_ticks > second->wkup_ticks; 
 }
@@ -205,7 +205,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
   while (!list_empty(sleep_list))
   {
 	  struct list_elem *e= list_back(sleep_list);
-	  struct thread *curr_thread = list_entry(e,struct thread,elem);
+	  struct thread *curr_thread = list_entry(e,struct thread,sleep_elem);
 	  //if still wait then do nothing
 	  if (curr_thread->wkup_ticks > ticks)
 	  {
