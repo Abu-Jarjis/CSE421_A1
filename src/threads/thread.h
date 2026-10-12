@@ -146,6 +146,7 @@ int thread_get_load_avg (void);
 
 //Added for p1;
 struct list* thread_get_sleep_list();
+
 //Added for p2
 bool priority_sort(const struct list_elem *e1, const struct list_elem *e2, void *aux);
 #endif /**< threads/thread.h */
