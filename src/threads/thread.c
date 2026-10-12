@@ -207,16 +207,13 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-printf ("THREAD_CREATE: unblocking %s status=%d\n",
-        t->name, t->status);
-
   /* Add to run queue. */
   thread_unblock (t);
 
  // Schedule the new thread if priority is higher than the curr 
- // if (thread_current()->priority < t->priority){
- //     thread_yield();
- // }
+  if (thread_current()->priority < t->priority){
+      thread_yield();
+  }
 
   return tid;
 }
@@ -250,7 +247,6 @@ thread_unblock (struct thread *t)
 {
   enum intr_level old_level;
 
-  printf("unblock: thread=%s tid=%d status=%d\n", t->name, t->tid, t->status);
   ASSERT (is_thread (t));
 
   old_level = intr_disable ();
@@ -407,7 +403,6 @@ idle (void *idle_started_ UNUSED)
 {
   struct semaphore *idle_started = idle_started_;
   idle_thread = thread_current ();
-  printf("IDLE CHECK: thread=%s tid=%d status=%d\n", idle_thread->name, idle_thread->tid, idle_thread->status);
   sema_up (idle_started);
 
   for (;;) 
