@@ -348,9 +348,20 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
-  /* If priority's lowered below a ready thread, yield now. */
-  preemptive_check_priority ();
+  struct thread *cur_thr  = thread_current();
+  enum intr_level old_level;
+
+  if (thread_mlfqs)
+    return;
+
+  /*Change base prio and keep active donation*/
+  old_level = intr_disable();
+  cur_thr->base_priority = new_priority;
+  thread_update_priority(cur_thr);
+  intr_set_level(old_level);
+
+  preemptive_check_priority();
+
 }
 
 /** Returns the current thread's priority. */
@@ -481,6 +492,9 @@ init_thread (struct thread *t, const char *name, int priority)
   
   //for task 1
   sema_init(&t->sleep_sema, 0);
+  t->base_priority = priority;
+  list_init (&t->donors);
+  t->waiting_lock = NULL;
 
 
   old_level = intr_disable ();
@@ -624,6 +638,22 @@ priority_sort(const struct list_elem *e1,
 	return first->priority > second->priority;
 }
 
+static bool donor_priority_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
+  return list_entry(a, struct thread, donor_elem)->priority<list_entry (b, struct thread, donor_elem)->priority;
+}
+
+void thread_update_priority (struct thread *t)
+{
+  t->priority = t->base_priority;
+  if (!list_empty(&t->donors))
+    {
+      struct thread *top = list_entry (list_max(&t->donors, donor_priority_less, NULL), struct thread, donor_elem);
+
+      if (top->priority > t->priority)
+        t->priority = top->priority;
+      
+    }
+}
 /*yields the cpu if a ready thread has higher prio than the active thread. Safe to call from an interrupt handler, where it delays the yield until the handler returns.*/
 void
 preemptive_check_priority(void){

@@ -92,9 +92,15 @@ struct thread
     struct list_elem allelem;           /**< List element for all threads list. */
 
 	//for task 1
-    int64_t wkup_ticks;
+   int64_t wkup_ticks;
 	struct semaphore sleep_sema;
-    struct list_elem sleep_elem;              
+   struct list_elem sleep_elem;
+   
+   //fort task 2 priority donation
+   int base_priority;
+   struct list donors;
+   struct list_elem donor_elem;
+   struct lock *waiting_lock;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /**< List element. */
@@ -150,4 +156,5 @@ struct list* thread_get_sleep_list(void);
 //Added for p2
 bool priority_sort(const struct list_elem *e1, const struct list_elem *e2, void *aux);
 void preemptive_check_priority(void);
+void thread_update_priority (struct thread *t);
 #endif /**< threads/thread.h */
