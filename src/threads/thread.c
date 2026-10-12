@@ -211,9 +211,7 @@ thread_create (const char *name, int priority,
   thread_unblock (t);
 
  // Schedule the new thread if priority is higher than the curr 
-  if (thread_current()->priority < t->priority){
-      thread_yield();
-  }
+  preemptive_check_priority();
 
   return tid;
 }
