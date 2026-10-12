@@ -513,6 +513,7 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
+	list_sort(&ready_list,priority_sort,NULL);
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
@@ -604,14 +605,16 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 
 //Added for p1;
-struct list* thread_get_sleep_list()
+struct 
+list* thread_get_sleep_list()
 {
 	return &sleep_list;
 }
 
 //Added for p2;
 //Less function for the priority. Added by Khoa.
-bool priority_sort(const struct list_elem *e1,
+bool 
+priority_sort(const struct list_elem *e1,
                    const struct list_elem *e2,
                    void *aux)
 {       
@@ -620,5 +623,17 @@ bool priority_sort(const struct list_elem *e1,
 	return first->priority > second->priority;
 }
 
-
+void
+preemptive_check_priority(){
+  enum intr_level old_level;
+  old_level = intr_disable();
+  if (!list_empty(&ready_list) && list_entry(list_front(&ready_list),struct thread,elem)->priority > thread_current()->priority){
+	  if (intr_context()){
+		  intr_yield_on_return();
+	  }else{
+		  thread_yield();
+	  }
+  }
+  intr_set_level(old_level);
+}
 
