@@ -214,9 +214,9 @@ printf ("THREAD_CREATE: unblocking %s status=%d\n",
   thread_unblock (t);
 
  // Schedule the new thread if priority is higher than the curr 
-  if (thread_current()->priority < t->priority){
-	  thread_yield();
-  }
+ // if (thread_current()->priority < t->priority){
+ //     thread_yield();
+ // }
 
   return tid;
 }
@@ -282,7 +282,6 @@ thread_current (void)
      recursion can cause stack overflow. */
   ASSERT (is_thread (t));
   ASSERT (t->status == THREAD_RUNNING);
-
   return t;
 }
 
@@ -326,7 +325,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-  list_insert_ordered(&ready_list, &cur->elem,priority_sort,NULL);
+	  list_insert_ordered(&ready_list, &cur->elem,priority_sort,NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -408,6 +407,7 @@ idle (void *idle_started_ UNUSED)
 {
   struct semaphore *idle_started = idle_started_;
   idle_thread = thread_current ();
+  printf("IDLE CHECK: thread=%s tid=%d status=%d\n", idle_thread->name, idle_thread->tid, idle_thread->status);
   sema_up (idle_started);
 
   for (;;) 
@@ -484,7 +484,6 @@ init_thread (struct thread *t, const char *name, int priority)
   
   //for task 1
   sema_init(&t->sleep_sema, 0);
-
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -629,7 +628,8 @@ void
 preemptive_check_priority(){
   enum intr_level old_level;
   old_level = intr_disable();
-  if (!list_empty(&ready_list) && list_entry(list_front(&ready_list),struct thread,elem)->priority > thread_current()->priority){
+  if (!list_empty(&ready_list) && 
+	  list_entry(list_front(&ready_list),struct thread,elem)->priority > thread_current()->priority){
 	  if (intr_context()){
 		  intr_yield_on_return();
 	  }else{
