@@ -216,6 +216,23 @@ own_lock(struct lock *lock)
   recompute_thread_priority(cur);
 }
 
+ //chain donation + check most urgent thread max_priority for lock
+static void
+donate_priority (struct lock *l, int p)
+{
+  int depth;
+  for (depth = 0;
+       l != NULL && l->holder != NULL && depth < 8;
+       depth++, l = l->holder->blocking_lock)
+    {
+      if (p > l->max_priority)
+        l->max_priority = p;
+      if (p <= l->holder->priority)
+        break;
+      l->holder->priority = p;
+    }
+}
+
 /* Acquires LOCK, sleeping until it becomes available if
    necessary.  The lock must not already be held by the current
    thread.
@@ -235,23 +252,9 @@ lock_acquire (struct lock *lock)
   enum intr_level old_level = intr_disable();
 
   if (lock->holder!=NULL){
-	  int p = cur->priority;
-	  struct lock *l = lock;
+	  
 	  cur->blocking_lock = lock;
-
-	  //chain donation + check most urgent thread max_priority for lock
-	  for (int depth = 0; depth<8;depth++){
-		  if (l != NULL && l->holder!=NULL){
-			  if (p > l->max_priority){
-				  l->max_priority = p;
-			  }
-			  if (p =< l->holder->priority){
-				break;
-			  }
-			  l->holder->priority = p;
-			  l = l->holder->blocking_lock;
-		  }
-	  }
+	  donate_priority(lock, cur->priority);
   }
 
   intr_set_level (old_level);
