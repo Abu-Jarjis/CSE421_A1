@@ -114,7 +114,7 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)){
-	  list_sort(&sema->waiters, priority_sort,NULL);
+    list_sort(&sema->waiters, priority_sort,NULL);
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
 										struct thread, elem));
   }
@@ -237,21 +237,20 @@ lock_acquire (struct lock *lock)
   if (lock->holder!=NULL){
 	  int p = cur->priority;
 	  struct lock *l = lock;
-	  int depth = 0;
-
 	  cur->blocking_lock = lock;
 
 	  //chain donation + check most urgent thread max_priority for lock
-	  while (l != NULL && l->holder !=NULL && depth < 8){
-		  if (p > l->max_priority){
-			  l->max_priority = p;
+	  for (int depth = 0; depth<8;depth++){
+		  if (l != NULL && l->holder!=NULL){
+			  if (p > l->max_priority){
+				  l->max_priority = p;
+			  }
+			  if (p =< l->holder->priority){
+				break;
+			  }
+			  l->holder->priority = p;
+			  l = l->holder->blocking_lock;
 		  }
-		  if (l->holder->priority >= p){
-			  break;
-		  }
-		  l->holder->priority = p;
-		  l = l->holder->blocking_lock;
-		  depth++;
 	  }
   }
 

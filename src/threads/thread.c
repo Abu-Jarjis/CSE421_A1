@@ -346,13 +346,13 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  enum intr_level old_level;
 
   struct thread *cur = thread_current ();
-  old_level = intr_disable ();
+  enum intr_level old_level = intr_disable();
   
   cur->original_priority = new_priority;
   recompute_thread_priority(cur);   
+
   intr_set_level (old_level);
 
   preemptive_check_priority();
