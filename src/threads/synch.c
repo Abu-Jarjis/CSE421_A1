@@ -263,9 +263,8 @@ lock_acquire (struct lock *lock)
 
   cur->blocking_lock = NULL;
   own_lock(lock);
-  lock->holder = thread_current ();
 
-  intr_set_level (old_level);
+  intr_set_level(old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -304,7 +303,7 @@ lock_release (struct lock *lock)
   list_remove(&lock->elem);
   lock->holder=NULL;
   lock->max_priority=PRI_MIN;
-  recompute_thread_priority(thread_current);
+  recompute_thread_priority(thread_current());
 
   intr_set_level(old_level);
 
