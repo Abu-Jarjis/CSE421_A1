@@ -346,7 +346,15 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  enum intr_level old_level;
+
+  struct thread *cur = thread_current ();
+  old_level = intr_disable ();
+  
+  cur->original_priority = new_priority;
+  recompute_thread_priority(cur);   
+  intr_set_level (old_level);
+
   preemptive_check_priority();
 }
 
@@ -478,6 +486,11 @@ init_thread (struct thread *t, const char *name, int priority)
   
   //for task 1
   sema_init(&t->sleep_sema, 0);
+
+  //for task 2
+  t->original_priority=priority;
+  t->blocking_lock=NULL;
+  list_init(&t->holding_lock);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -618,10 +631,28 @@ priority_sort(const struct list_elem *e1,
 	return first->priority > second->priority;
 }
 
+//called when INR OFF for recomputing the priority
+void
+recompute_thread_priority(struct thread *thread){
+	int highest = thread->original_priority;
+	struct list_elem *e;
+
+	ASSERT(intr_get_level()==INTR_OFF);
+
+	for (e=list_begin(&thread->holding_lock); e!= list_end(&thread->holding_lock);e=list_next(e)){
+		struct lock *lock = list_entry(e, struct lock, elem);
+		if (lock->max_priority > highest){
+			highest=lock->max_priority;
+		}
+	}
+	thread->priority=highest;
+}
+
+//yield when needed when changing priority
 void
 preemptive_check_priority(){
-  enum intr_level old_level;
-  old_level = intr_disable();
+  enum intr_level old_level=intr_disable();
+  list_sort(&ready_list, priority_sort, NULL);
   if (!list_empty(&ready_list) && 
 	  list_entry(list_front(&ready_list),struct thread,elem)->priority > thread_current()->priority){
 	  if (intr_context()){
