@@ -114,7 +114,9 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)){
-    list_sort(&sema->waiters, priority_sort,NULL);
+  
+	//Highest priority thread wake up first.
+	  list_sort(&sema->waiters, priority_sort,NULL);
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
 										struct thread, elem));
   }
@@ -255,6 +257,8 @@ lock_acquire (struct lock *lock)
 	  
 	  cur->blocking_lock = lock;
 	  donate_priority(lock, cur->priority);
+  
+  
   }
 
   intr_set_level (old_level);
@@ -344,7 +348,7 @@ cond_init (struct condition *cond)
   list_init (&cond->waiters);
 }
 
-static bool
+bool
 cond_priority_big_first(const struct list_elem *a,
                    const struct list_elem *b,
                    void *aux)
