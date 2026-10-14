@@ -249,7 +249,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_insert_ordered(&ready_list, &t->elem,priority_sort,NULL);
+  list_push_back(&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -319,7 +319,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-	  list_insert_ordered(&ready_list, &cur->elem,priority_sort,NULL);
+//Fix! No need sorting here.
+	  list_push_back(&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -492,6 +493,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->blocking_lock=NULL;
   list_init(&t->holding_lock);
 
+  //
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
@@ -519,9 +521,11 @@ static struct thread *
 next_thread_to_run (void) 
 {
   if (list_empty (&ready_list))
-    return idle_thread;
+    
+  {return idle_thread;}
   else
-	list_sort(&ready_list,priority_sort,NULL);
+	 //Change here, sort the list based on priority whenever decide the next thread to run
+  {list_sort(&ready_list,priority_sort,NULL);}
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
@@ -638,12 +642,16 @@ recompute_thread_priority(struct thread *thread){
 	struct list_elem *e;
 
 	ASSERT(intr_get_level()==INTR_OFF);
-
+	//loop through lock list
 	for (e=list_begin(&thread->holding_lock); e!= list_end(&thread->holding_lock);e=list_next(e)){
+		
 		struct lock *lock = list_entry(e, struct lock, elem);
+		
 		if (lock->max_priority > highest){
 			highest=lock->max_priority;
 		}
+	
+	
 	}
 	thread->priority=highest;
 }
@@ -655,9 +663,9 @@ preemptive_check_priority(){
   list_sort(&ready_list, priority_sort, NULL);
   if (!list_empty(&ready_list) && 
 	  list_entry(list_front(&ready_list),struct thread,elem)->priority > thread_current()->priority){
-	  if (intr_context()){
+	  if (intr_context()){ //check if the thread is in intr_context, if so, call intr_yield_on_return instead of thread_yield
 		  intr_yield_on_return();
-	  }else{
+	  }else{//Yield safely if not in intr context
 		  thread_yield();
 	  }
   }
