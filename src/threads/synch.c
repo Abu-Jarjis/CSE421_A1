@@ -116,7 +116,7 @@ sema_up (struct semaphore *sema)
   if (!list_empty (&sema->waiters)){
   
 	//Highest priority thread wake up first.
-	  list_sort(&sema->waiters, priority_sort,NULL);
+	list_sort(&sema->waiters, priority_sort,NULL);
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
 										struct thread, elem));
   }
@@ -215,7 +215,6 @@ own_lock(struct lock *lock)
   lock->holder = cur;
   list_push_back (&cur->holding_lock, &lock->elem);
   lock->max_priority = highest_waiter_priority (lock);
-  recompute_thread_priority(cur);
 }
 
  //chain donation + check most urgent thread max_priority for lock
@@ -257,8 +256,6 @@ lock_acquire (struct lock *lock)
 	  
 	  cur->blocking_lock = lock;
 	  donate_priority(lock, cur->priority);
-  
-  
   }
 
   intr_set_level (old_level);

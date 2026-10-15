@@ -320,7 +320,7 @@ thread_yield (void)
   old_level = intr_disable ();
   if (cur != idle_thread) 
 //Fix! No need sorting here.
-	  list_push_back(&ready_list, &cur->elem);
+  list_push_back(&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -650,8 +650,6 @@ recompute_thread_priority(struct thread *thread){
 		if (lock->max_priority > highest){
 			highest=lock->max_priority;
 		}
-	
-	
 	}
 	thread->priority=highest;
 }
