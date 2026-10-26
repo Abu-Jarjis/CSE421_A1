@@ -101,6 +101,10 @@ struct thread
 	struct lock *blocking_lock;
 	struct list holding_lock;
 
+   //for task 3(MLFQS)
+   int nice;
+   int recent_cpu;
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /**< List element. */
 

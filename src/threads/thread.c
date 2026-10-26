@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -62,6 +63,10 @@ static unsigned thread_ticks;   /**< # of timer ticks since last yield. */
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
+
+#define F 16384
+static int load_avg;
+static void mlfqs_update_priority (struct thread *thr);
 
 static void kernel_thread (thread_func *, void *aux);
 
@@ -143,6 +148,47 @@ thread_tick (void)
   else
     kernel_ticks++;
 
+  if (thread_mlfqs)
+    {
+      struct thread *cur_thr = thread_current ();
+      int64_t ticks = timer_ticks ();
+      struct list_elem *cur_elem;
+      struct thread *thr;
+
+      if (cur_thr != idle_thread)
+        cur_thr->recent_cpu += F;
+
+      if (ticks % TIMER_FREQ == 0)
+        {
+          int ready_threads;
+          int coef;
+
+          ready_threads = list_size (&ready_list);
+          if (cur_thr != idle_thread)
+            ready_threads++;
+          load_avg = load_avg * 59 / 60 + ready_threads * F / 60;
+
+          coef = (int64_t) 2 * load_avg * F / (2 * load_avg + F);
+
+          for (cur_elem = list_begin (&all_list); cur_elem != list_end (&all_list); cur_elem = list_next(cur_elem))
+          {
+            thr = list_entry (cur_elem, struct thread, allelem);
+            if (thr != idle_thread){
+              thr->recent_cpu = (int64_t) coef * thr->recent_cpu / F + thr->nice * F;
+              mlfqs_update_priority(thr);
+            }
+          }
+
+        }
+    
+    if (ticks % 4 == 0)
+      {
+        if (cur_thr != idle_thread)
+          mlfqs_update_priority(cur_thr);
+        preemptive_check_priority();
+      }
+    }
+
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
@@ -191,6 +237,14 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+
+  if (thread_mlfqs)
+    {
+      struct thread *parent = thread_current ();
+      t->nice = parent->nice;
+      t->recent_cpu = parent->recent_cpu;
+      mlfqs_update_priority(t);
+    }
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -348,13 +402,19 @@ void
 thread_set_priority (int new_priority) 
 {
 
-  struct thread *cur = thread_current ();
-  enum intr_level old_level = intr_disable();
+  struct thread *cur_thr;
+  enum intr_level old_level;
   
-  cur->original_priority = new_priority;
-  recompute_thread_priority(cur);   
+  if (thread_mlfqs)
+    return;
 
-  intr_set_level (old_level);
+  cur_thr = thread_current();
+  old_level = intr_disable();
+
+  cur_thr->original_priority = new_priority;
+  recompute_thread_priority(cur_thr);
+
+  intr_set_level(old_level);
 
   preemptive_check_priority();
 }
@@ -368,9 +428,19 @@ thread_get_priority (void)
 
 /** Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) 
+thread_set_nice (int nice) 
 {
   /* Not yet implemented. */
+  struct thread *cur_thr = thread_current();
+  enum intr_level old_level;
+
+  /* Timer intterup update prio soit is left out while current one is change*/
+  old_level = intr_disable();
+  cur_thr->nice = nice;
+  mlfqs_update_priority(cur_thr);
+  intr_set_level(old_level);
+
+  preemptive_check_priority();
 }
 
 /** Returns the current thread's nice value. */
@@ -378,7 +448,7 @@ int
 thread_get_nice (void) 
 {
   /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /** Returns 100 times the system load average. */
@@ -386,7 +456,7 @@ int
 thread_get_load_avg (void) 
 {
   /* Not yet implemented. */
-  return 0;
+  return (load_avg * 100 + F/2) / F;
 }
 
 /** Returns 100 times the current thread's recent_cpu value. */
@@ -394,9 +464,26 @@ int
 thread_get_recent_cpu (void) 
 {
   /* Not yet implemented. */
-  return 0;
+  int value = thread_current()->recent_cpu * 100;
+
+  if (value >= 0)
+    return (value + F / 2) / F;
+  else
+    return (value - F / 2) / F;
+
 }
-
+
+static void mlfqs_update_priority (struct thread *thr)
+{
+  int priority = PRI_MAX - thr->recent_cpu/4/F - thr->nice * 2;
+
+  if (priority < PRI_MIN)
+    priority = PRI_MIN;
+  if (priority > PRI_MAX)
+    priority = PRI_MAX;
+  thr->priority = priority;
+}
+
 /** Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -520,13 +607,17 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
+  struct list_elem *next_elem;
+
   if (list_empty (&ready_list))
-    
-  {return idle_thread;}
-  else
-	 //Change here, sort the list based on priority whenever decide the next thread to run
-  {list_sort(&ready_list,priority_sort,NULL);}
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  {
+    return idle_thread;
+  }
+
+  /*Take highest prio ready thread*/
+  next_elem = list_min (&ready_list, priority_sort, NULL);
+  list_remove(next_elem);
+  return list_entry (next_elem, struct thread, elem);
 }
 
 /** Completes a thread switch by activating the new thread's page
@@ -642,6 +733,9 @@ recompute_thread_priority(struct thread *thread){
 	struct list_elem *e;
 
 	ASSERT(intr_get_level()==INTR_OFF);
+
+  if (thread_mlfqs)
+    return;
 	//loop through lock list
 	for (e=list_begin(&thread->holding_lock); e!= list_end(&thread->holding_lock);e=list_next(e)){
 		
@@ -658,9 +752,9 @@ recompute_thread_priority(struct thread *thread){
 void
 preemptive_check_priority(){
   enum intr_level old_level=intr_disable();
-  list_sort(&ready_list, priority_sort, NULL);
+
   if (!list_empty(&ready_list) && 
-	  list_entry(list_front(&ready_list),struct thread,elem)->priority > thread_current()->priority){
+	  list_entry(list_min(&ready_list, priority_sort, NULL),struct thread,elem)->priority > thread_current()->priority){
 	  if (intr_context()){ //check if the thread is in intr_context, if so, call intr_yield_on_return instead of thread_yield
 		  intr_yield_on_return();
 	  }else{//Yield safely if not in intr context
