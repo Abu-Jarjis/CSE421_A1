@@ -200,6 +200,48 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
 
+if (thread_mlfqs && thread_current()!=get_idle()){
+	thread_current()->recent_cpu= addn(thread_current()->recent_cpu,1);
+	prio_recal(thread_current());	
+}
+
+if (thread_mlfqs && timer_ticks()%4==0){
+	
+
+      struct list_elem *e;
+	
+      struct list* all_list= thread_get_all_list();
+
+      for (e = list_begin (all_list); e != list_end (all_list);
+           e = list_next (e))
+        {
+          struct thread* thread = list_entry (e, struct thread, allelem);
+          prio_recal(thread);
+        }
+
+	
+
+}
+
+
+if (thread_mlfqs && timer_ticks()%TIMER_FREQ==0){
+
+	load_avg_recal();
+      struct list_elem *e;
+	  struct list* all_list= thread_get_all_list();
+      for (e = list_begin (all_list); e != list_end (all_list);
+           e = list_next (e))
+        {
+          struct thread* thread = list_entry (e, struct thread, allelem);
+          recent_cpu_recal(thread);
+        }
+
+
+
+}
+
+
+
   struct list *sleep_list = thread_get_sleep_list();
 
   while (!list_empty(sleep_list))
