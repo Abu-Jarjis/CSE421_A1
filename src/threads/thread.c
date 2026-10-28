@@ -385,6 +385,7 @@ thread_set_priority (int new_priority)
 	struct thread *cur = thread_current ();
 	enum intr_level old_level = intr_disable();
 	if (thread_mlfqs){
+	intr_set_level (old_level);
 		return;
 	}
 
@@ -840,7 +841,7 @@ void recent_cpu_recal(struct thread* thread){
 	intr_set_level(old_level);
 }
 
-/** Updating schedule (driven by timer_interrupt() in devices/timer.c):
+/** todolist:
  *
  * 1/ Nice: recalculate the priority when thread_set_nice() is called,
  *    then yield if the thread is no longer the highest priority.
