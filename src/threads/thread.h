@@ -91,15 +91,20 @@ struct thread
     int priority;                       /**< Priority. */
     struct list_elem allelem;           /**< List element for all threads list. */
 
-	//for task 1
+    //for task 1
     int64_t wkup_ticks;
-	struct semaphore sleep_sema;
+    struct semaphore sleep_sema;
     struct list_elem sleep_elem;              
-	
-	//for task 2
-	int original_priority;
-	struct lock *blocking_lock;
-	struct list holding_lock;
+
+    //for task 2
+    int original_priority;
+    struct lock *blocking_lock;
+    struct list holding_lock;
+
+    //for task 3 
+    int nice;
+    int recent_cpu;
+
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /**< List element. */
@@ -114,8 +119,8 @@ struct thread
   };
 
 /** If false (default), use round-robin scheduler.
-   If true, use multi-level feedback queue scheduler.
-   Controlled by kernel command-line option "-o mlfqs". */
+  If true, use multi-level feedback queue scheduler.
+  Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
 void thread_init (void);

@@ -7,6 +7,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "threads/fixed-point.h"
   
 /** See [8254] for hardware details of the 8254 timer chip. */
 
@@ -198,93 +199,131 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
-  ticks++;
+	ticks++;
+	if (thread_mlfqs && thread_current()!=get_idle()){
+		thread_current()->recent_cpu= addn(thread_current()->recent_cpu,1);
+	}
 
-  struct list *sleep_list = thread_get_sleep_list();
+	//every 4th
+	if (thread_mlfqs && timer_ticks()%4==0){
 
-  while (!list_empty(sleep_list))
-  {
-	  struct list_elem *e= list_back(sleep_list);
-	  struct thread *curr_thread = list_entry(e,struct thread,sleep_elem);
-	  //if still wait then do nothing
-	  if (curr_thread->wkup_ticks > ticks)
-	  {
-		  break;
-	  }
-	  list_pop_back(sleep_list);
-	  sema_up(&curr_thread->sleep_sema);
-  }
-  thread_tick ();
+		struct list_elem *e;
+		struct list* all_list= thread_get_all_list();
+
+		for (e = list_begin (all_list); e != list_end (all_list);
+				e = list_next (e))
+		{
+			struct thread* thread = list_entry (e, struct thread, allelem);
+			if (thread != get_idle())
+				prio_recal(thread);
+		}
+
+		preemptive_check_priority();
+	}
+
+	//every FREq
+	if (thread_mlfqs && timer_ticks()%TIMER_FREQ==0){
+
+		load_avg_recal();
+		struct list_elem *e;
+		struct list* all_list= thread_get_all_list();
+		for (e = list_begin (all_list); e != list_end (all_list);
+				e = list_next (e))
+		{
+			struct thread* thread = list_entry (e, struct thread, allelem);
+			if (thread != get_idle())
+				recent_cpu_recal(thread);
+		}
+
+		preemptive_check_priority();
+	}
+
+
+	struct list *sleep_list = thread_get_sleep_list();
+
+	while (!list_empty(sleep_list))
+	{
+		struct list_elem *e= list_back(sleep_list);
+		struct thread *curr_thread = list_entry(e,struct thread,sleep_elem);
+		//if still wait then do nothing
+		if (curr_thread->wkup_ticks > ticks)
+		{
+			break;
+		}
+		list_pop_back(sleep_list);
+		sema_up(&curr_thread->sleep_sema);
+	}
+	thread_tick ();
 }
 
 /** Returns true if LOOPS iterations waits for more than one timer
-   tick, otherwise false. */
-static bool
+  tick, otherwise false. */
+	static bool
 too_many_loops (unsigned loops) 
 {
-  /* Wait for a timer tick. */
-  int64_t start = ticks;
-  while (ticks == start)
-    barrier ();
+	/* Wait for a timer tick. */
+	int64_t start = ticks;
+	while (ticks == start)
+		barrier ();
 
-  /* Run LOOPS loops. */
-  start = ticks;
-  busy_wait (loops);
+	/* Run LOOPS loops. */
+	start = ticks;
+	busy_wait (loops);
 
-  /* If the tick count changed, we iterated too long. */
-  barrier ();
-  return start != ticks;
+	/* If the tick count changed, we iterated too long. */
+	barrier ();
+	return start != ticks;
 }
 
 /** Iterates through a simple loop LOOPS times, for implementing
-   brief delays.
+  brief delays.
 
-   Marked NO_INLINE because code alignment can significantly
-   affect timings, so that if this function was inlined
-   differently in different places the results would be difficult
-   to predict. */
-static void NO_INLINE
+  Marked NO_INLINE because code alignment can significantly
+  affect timings, so that if this function was inlined
+  differently in different places the results would be difficult
+  to predict. */
+	static void NO_INLINE
 busy_wait (int64_t loops) 
 {
-  while (loops-- > 0)
-    barrier ();
+	while (loops-- > 0)
+		barrier ();
 }
 
 /** Sleep for approximately NUM/DENOM seconds. */
-static void
+	static void
 real_time_sleep (int64_t num, int32_t denom) 
 {
-  /* Convert NUM/DENOM seconds into timer ticks, rounding down.
-          
-        (NUM / DENOM) s          
-     ---------------------- = NUM * TIMER_FREQ / DENOM ticks. 
-     1 s / TIMER_FREQ ticks
-  */
-  int64_t ticks = num * TIMER_FREQ / denom;
+	/* Convert NUM/DENOM seconds into timer ticks, rounding down.
 
-  ASSERT (intr_get_level () == INTR_ON);
-  if (ticks > 0)
-    {
-      /* We're waiting for at least one full timer tick.  Use
-         timer_sleep() because it will yield the CPU to other
-         processes. */                
-      timer_sleep (ticks); 
-    }
-  else 
-    {
-      /* Otherwise, use a busy-wait loop for more accurate
-         sub-tick timing. */
-      real_time_delay (num, denom); 
-    }
+	   (NUM / DENOM) s          
+	   ---------------------- = NUM * TIMER_FREQ / DENOM ticks. 
+	   1 s / TIMER_FREQ ticks
+	   */
+	int64_t ticks = num * TIMER_FREQ / denom;
+
+	ASSERT (intr_get_level () == INTR_ON);
+	if (ticks > 0)
+	{
+		/* We're waiting for at least one full timer tick.  Use
+		   timer_sleep() because it will yield the CPU to other
+		   processes. */                
+		timer_sleep (ticks); 
+	}
+	else 
+	{
+		/* Otherwise, use a busy-wait loop for more accurate
+		   sub-tick timing. */
+		real_time_delay (num, denom); 
+	}
 }
 
 /** Busy-wait for approximately NUM/DENOM seconds. */
-static void
+	static void
 real_time_delay (int64_t num, int32_t denom)
 {
-  /* Scale the numerator and denominator down by 1000 to avoid
-     the possibility of overflow. */
-  ASSERT (denom % 1000 == 0);
-  busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
+	/* Scale the numerator and denominator down by 1000 to avoid
+	   the possibility of overflow. */
+	ASSERT (denom % 1000 == 0);
+	busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
 }
 
