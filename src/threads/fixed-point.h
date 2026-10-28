@@ -3,14 +3,13 @@
 
 #define F_VALUE 16384
 
-
-
-
 //Conversion
 
 #define itofp(x) ((x)*(F_VALUE))
 
 #define fptoi(x) ( ((x)<0)  ? ( ( (x)-((F_VALUE)/2) ) / (F_VALUE)) : ( ( (x)+((F_VALUE)/2) ) / (F_VALUE))) 
+
+#define fptoi_trunc(x) ( (x) / (F_VALUE))
 
 //Addition and subtraction
 

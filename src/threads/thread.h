@@ -5,7 +5,6 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/synch.h"
-#include "threads/fixed-point.h"
 /** States in a thread's life cycle. */
 enum thread_status
   {
@@ -167,10 +166,6 @@ bool priority_sort(const struct list_elem *e1, const struct list_elem *e2, void 
 void preemptive_check_priority(void);
 void thread_update_priority (struct thread *t);
 
-
-
-
-
 //Added for p3
 
 void mlfqs_add(struct thread* thread);
@@ -178,8 +173,6 @@ void prio_recal(struct thread* thread);
 void load_avg_recal();
 int count_ready();
 void recent_cpu_recal(struct thread* thread);
-void mlfqs_preemptive(struct thread* thread);
-
 struct list* thread_get_all_list();
 
 struct thread* get_idle();
