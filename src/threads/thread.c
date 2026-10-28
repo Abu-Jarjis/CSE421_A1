@@ -96,24 +96,29 @@ static tid_t allocate_tid (void);
 void
 thread_init (void) 
 {
-  ASSERT (intr_get_level () == INTR_OFF);
+	ASSERT (intr_get_level () == INTR_OFF);
+	if (thread_mlfqs){ 
+		for (int i = 0; i <= PRI_MAX; i++){ 
+			list_init(&mlfqs_list[i]); 
+		} 
 
-  lock_init (&tid_lock);
-  list_init (&ready_list);
-  list_init (&all_list);
+	}   
+	lock_init (&tid_lock);
+	list_init (&ready_list);
+	list_init (&all_list);
 
 
-/** Sleeping thread list, for task 1---------------------------------------*/
-  list_init (&sleep_list); 
-/** -----------------------------------------------------------------------*/
+	/** Sleeping thread list, for task 1---------------------------------------*/
+	list_init (&sleep_list); 
+	/** -----------------------------------------------------------------------*/
 
-  /* Set up a thread structure for the running thread. */
-  initial_thread = running_thread ();
-  init_thread (initial_thread, "main", PRI_DEFAULT);
-  initial_thread->status = THREAD_RUNNING;
-  initial_thread->tid = allocate_tid ();
-  if (thread_mlfqs)
-	  prio_recal (initial_thread);
+	/* Set up a thread structure for the running thread. */
+	initial_thread = running_thread ();
+	init_thread (initial_thread, "main", PRI_DEFAULT);
+	initial_thread->status = THREAD_RUNNING;
+	initial_thread->tid = allocate_tid ();
+	if (thread_mlfqs)
+		prio_recal (initial_thread);
 
 }
 
@@ -400,7 +405,7 @@ thread_get_priority (void)
 
 /** Sets the current thread's nice value to NICE. */
 	void
-thread_set_nice (int nice UNUSED) 
+thread_set_nice (int nice ) 
 {
 	int real_nice= nice;
 
@@ -428,7 +433,7 @@ thread_get_nice (void)
 	int
 thread_get_load_avg (void) 
 {
-  return fptoi (multn (load_avg, 100));
+	return fptoi (multn (load_avg, 100));
 }
 
 /** Returns 100 times the current thread's recent_cpu value. */
@@ -722,13 +727,19 @@ preemptive_check_priority(){
 	{
 		int i;
 		for (i = PRI_MAX; i >= PRI_MIN; i--)
-			if (!list_empty (&mlfqs_list[i]))
+		{
+			if (!list_empty (&mlfqs_list[i])){
+
 				highest = i;
+				break;
+			}
+		}
 	}else{
 		if (!list_empty (&ready_list)){
 			list_sort(&ready_list, priority_sort, NULL);
 			highest = list_entry (list_front (&ready_list), struct thread, elem)->priority;
 		}else{
+			intr_set_level(old_level);
 			return; 
 		}
 	}
