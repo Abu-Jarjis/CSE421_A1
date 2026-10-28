@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/fixed-point.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -43,6 +44,7 @@ static struct list sleep_list;
 
 //mlfq list for all prio
 static struct list mlfqs_list[PRI_MAX+1];
+static int load_avg = 0;
 
 /** Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
@@ -377,6 +379,9 @@ thread_set_priority (int new_priority)
 
 	struct thread *cur = thread_current ();
 	enum intr_level old_level = intr_disable();
+	if (thread_mlfqs){
+		return;
+	}
 
 	cur->original_priority = new_priority;
 	recompute_thread_priority(cur);   
@@ -397,31 +402,40 @@ thread_get_priority (void)
 	void
 thread_set_nice (int nice UNUSED) 
 {
-	/* Not yet implemented. */
+	int real_nice= nice;
+
+	if (nice < -20){real_nice=-20;}
+
+	else if (nice>20){real_nice=20;}
+
+	struct thread *current_thread= thread_current();
+	enum intr_level old_level= intr_disable();
+	current_thread->nice=real_nice;
+	prio_recal(current_thread);
+	intr_set_level(old_level);
+
+	preemptive_check_priority();
 }
 
 /** Returns the current thread's nice value. */
 	int
 thread_get_nice (void) 
 {
-	/* Not yet implemented. */
-	return 0;
+	return thread_current()->nice;
 }
 
 /** Returns 100 times the system load average. */
 	int
 thread_get_load_avg (void) 
 {
-	/* Not yet implemented. */
-	return 0;
+  return fptoi (multn (load_avg, 100));
 }
 
 /** Returns 100 times the current thread's recent_cpu value. */
 	int
 thread_get_recent_cpu (void) 
 {
-	/* Not yet implemented. */
-	return 0;
+	return fptoi (multn ((int64_t) thread_current()->recent_cpu, 100));
 }
 
 /** Idle thread.  Executes when no other thread is ready to run.
@@ -544,7 +558,7 @@ alloc_frame (struct thread *t, size_t size)
   empty.  (If the running thread can continue running, then it
   will be in the run queue.)  If the run queue is empty, return
   idle_thread. */
-static struct thread *
+	static struct thread *
 next_thread_to_run (void) 
 {
 	if (thread_mlfqs){ 
@@ -682,56 +696,57 @@ recompute_thread_priority(struct thread *thread){
 	int highest = thread->original_priority;
 	struct list_elem *e;
 
-    ASSERT(intr_get_level()==INTR_OFF);
+	ASSERT(intr_get_level()==INTR_OFF);
 
-    if (thread_mlfqs)
-        return;
+	if (thread_mlfqs)
+		return;
 
-    //loop through lock list
-    for (e=list_begin(&thread->holding_lock); e!= list_end(&thread->holding_lock);e=list_next(e)){
+	//loop through lock list
+	for (e=list_begin(&thread->holding_lock); e!= list_end(&thread->holding_lock);e=list_next(e)){
 
-        struct lock *lock = list_entry(e, struct lock, elem);
+		struct lock *lock = list_entry(e, struct lock, elem);
 
-        if (lock->max_priority > highest){
-            highest=lock->max_priority;
-        }
-    }
-    thread->priority=highest;
+		if (lock->max_priority > highest){
+			highest=lock->max_priority;
+		}
+	}
+	thread->priority=highest;
 }
 
 //yield check
 void
 preemptive_check_priority(){
-    enum intr_level old_level=intr_disable();
-    int highest = PRI_MIN;
-    if (thread_mlfqs)
-    {
-      int i;
-      for (i = PRI_MAX; i >= PRI_MIN; i--)
-        if (!list_empty (&mlfqs_list[i]))
-            highest = i
-    }else{
-        if (!list_empty (&ready_list)){
-            list_sort(&ready_list, priority_sort, NULL);
-            highest = list_entry (list_front (&ready_list), struct thread, elem)->priority;
-        }else{
-            return; 
-        }
-    }
-    if (highest > thread_current()->priority){
-        if (intr_context()){ //check intr_context intr_yield_on_return 
-            intr_yield_on_return();
-        }else{//no context instastop
-            thread_yield();
-        }
-    }
-    intr_set_level(old_level);
+	enum intr_level old_level=intr_disable();
+	int highest = PRI_MIN;
+	if (thread_mlfqs)
+	{
+		int i;
+		for (i = PRI_MAX; i >= PRI_MIN; i--)
+			if (!list_empty (&mlfqs_list[i]))
+				highest = i;
+	}else{
+		if (!list_empty (&ready_list)){
+			list_sort(&ready_list, priority_sort, NULL);
+			highest = list_entry (list_front (&ready_list), struct thread, elem)->priority;
+		}else{
+			return; 
+		}
+	}
+	if (highest > thread_current()->priority){
+		if (intr_context()){ //check intr_context intr_yield_on_return 
+			intr_yield_on_return();
+		}else{//no context instastop
+			thread_yield();
+		}
+	}
+	intr_set_level(old_level);
 }
 struct list* thread_get_all_list(void){
 	return &all_list;
 }
 
 //Added for task 3
+struct thread* get_idle(){return idle_thread;}
 void mlfqs_add(struct thread* thread){
 
 	ASSERT (thread_mlfqs);
@@ -761,8 +776,8 @@ void prio_recal(struct thread* thread){
 	if (priority > PRI_MAX){ priority = PRI_MAX;}
 
 	if (priority != thread->priority && thread->status==THREAD_READY){
-	list_remove(&thread->elem);
-	list_push_back(&mlfqs_list[priority],&thread->elem);
+		list_remove(&thread->elem);
+		list_push_back(&mlfqs_list[priority],&thread->elem);
 	}
 	thread->priority=priority;
 
@@ -808,7 +823,7 @@ void recent_cpu_recal(struct thread* thread){
 	int c = div(a,b);
 	int d = mult(c, thread->recent_cpu);
 	int e = addn(d, thread->nice);
-    
+
 	thread->recent_cpu = e;
 	prio_recal(thread);
 	intr_set_level(old_level);

@@ -161,4 +161,18 @@ struct list* thread_get_sleep_list();
 bool priority_sort(const struct list_elem *e1, const struct list_elem *e2, void *aux);
 void preemptive_check_priority();
 void recompute_thread_priority(struct thread *thread);
+
+
+//Added for p3
+
+void mlfqs_add(struct thread* thread);
+void prio_recal(struct thread* thread);
+void load_avg_recal();
+int count_ready();
+void recent_cpu_recal(struct thread* thread);
+void mlfqs_preemptive(struct thread* thread);
+
+struct list* thread_get_all_list();
+
+struct thread* get_idle();
 #endif /**< threads/thread.h */
